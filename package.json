@@ -1,0 +1,22 @@
+{
+  "name": "swami-abhyasika-v20-fullstack",
+  "version": "1.0.0",
+  "description": "Faithful full-stack conversion of SWAMI_V20.html - same app, backend-persisted",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "seed": "node server/seed.js",
+    "migrate": "node server/migrate.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
