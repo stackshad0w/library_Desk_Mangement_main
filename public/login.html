@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Swami Abhyasika</title>
+<style>
+  :root { --bg:#080a10; --bg2:#0f1219; --bg3:#161a24; --border:#242938; --text:#f5f6fa; --text3:#7b8296; --accent:#7c6fff; --accent2:#a59bff; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .card {
+    width: 100%; max-width: 360px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px; box-shadow: 0 24px 80px rgba(0,0,0,0.4);
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: var(--text3); font-size: 13px; margin: 0 0 24px; }
+  label { display: block; font-size: 12px; color: var(--text3); margin-bottom: 6px; font-weight: 600; }
+  input {
+    width: 100%; padding: 10px 12px; margin-bottom: 16px; background: var(--bg3);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button {
+    width: 100%; padding: 11px; background: var(--accent); color: white; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  button:hover { background: var(--accent2); }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #err { color: #ff6b6b; font-size: 13px; margin-bottom: 12px; display: none; }
+</style>
+</head>
+<body>
+  <form class="card" id="login-form">
+    <h1>Swami Abhyasika</h1>
+    <p class="sub">Sign in to continue</p>
+    <div id="err"></div>
+    <label for="username">Username</label>
+    <input type="text" id="username" autocomplete="username" required>
+    <label for="password">Password</label>
+    <input type="password" id="password" autocomplete="current-password" required>
+    <button type="submit" id="submit-btn">Sign In</button>
+  </form>
+
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const errEl = document.getElementById('err');
+      const btn = document.getElementById('submit-btn');
+      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Login failed');
+        localStorage.setItem('_auth_token', data.token);
+        window.location.href = '/index.html';
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    });
+  </script>
+</body>
+</html>
