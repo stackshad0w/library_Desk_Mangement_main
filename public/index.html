@@ -1653,7 +1653,7 @@
 
       <div class="form-actions">
         <button class="btn btn-ghost" onclick="closeModal('payment-modal')">Cancel</button>
-        <button class="btn btn-primary" onclick="savePayment()">&#128190; Record Payment &amp; Book Seat</button>
+        <button class="btn btn-primary" id="record-payment-btn" onclick="if(this.disabled)return; this.disabled=true; savePayment(); setTimeout(function(btn){ btn.disabled=false; }, 1200, this);">&#128190; Record Payment &amp; Book Seat</button>
       </div>
       <div id="receipt-area"></div>
     </div>

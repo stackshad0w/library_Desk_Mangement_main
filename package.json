@@ -4,13 +4,12 @@
   "description": "Swami Abhyasika — Vercel serverless + Turso (libSQL) + Cloudinary build. Same app, same UI, zero app.js changes.",
   "private": true,
   "scripts": {
-    "dev": "vercel dev",
     "seed": "node scripts/seed.js",
     "migrate": "node scripts/migrate.js",
     "deploy": "vercel --prod"
   },
   "dependencies": {
-    "@libsql/client": "^0.14.0",
+    "@libsql/client": "^0.17.4",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2"
   },
