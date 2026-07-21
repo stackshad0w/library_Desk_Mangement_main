@@ -13,7 +13,6 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#080a10">
   <meta name="description" content="Student Management System for Swami Abhyasika">
-  <link rel="manifest" id="pwa-manifest">
   <link
     href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap"
     rel="stylesheet">
@@ -778,6 +777,27 @@
   @media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style>
 
+
+<style id="swami-mobile-critical-fix">
+  /* Critical mobile interaction fix; no business logic changed. */
+  html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+  button, .nav-item, .icon-btn, .theme-toggle-btn, .mobile-menu-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .sidebar-backdrop { pointer-events: none; }
+  .sidebar-backdrop.open { pointer-events: auto; }
+  @media (max-width: 900px) {
+    .main { min-width: 0; overflow-x: hidden; }
+    .content { width: 100%; min-width: 0; }
+    .sidebar { visibility: hidden; }
+    .sidebar.mobile-open { visibility: visible; }
+  }
+  @media (max-width: 700px) {
+    .topbar { position: sticky; top: 0; z-index: 60; }
+    .topbar-actions { min-width: 0; }
+    .theme-toggle-btn, .mobile-menu-btn, #btn-new-student { min-width: 42px; min-height: 42px; }
+    .modal-overlay.open { padding: 10px; align-items: flex-start; overflow-y: auto; }
+    .modal { margin: auto 0; max-height: calc(100dvh - 20px); }
+  }
+</style>
 </head>
 
 <body>
@@ -2180,293 +2200,23 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closePhotoLightbox(); });
   </script>
 
-  <!-- PHOTO LIGHTBOX -->
-  <div id="photo-lightbox" onclick="closePhotoLightbox()" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.92);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(8px);cursor:zoom-out;">
-    <img id="lightbox-img" src="" style="max-width:88vw;max-height:80vh;border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,0.8);object-fit:contain;animation:lightboxIn 0.25s cubic-bezier(.34,1.56,.64,1);" onclick="event.stopPropagation()">
-    <div id="lightbox-name" style="color:white;font-size:18px;font-weight:700;letter-spacing:-0.01em;opacity:0.9;"></div>
-    <div style="color:rgba(255,255,255,0.4);font-size:12px;">Click anywhere to close</div>
-  </div>
-
-  <style>
-    @keyframes lightboxIn {
-      from { opacity:0; transform:scale(0.82); }
-      to   { opacity:1; transform:scale(1); }
-    }
-  
-/* ===== FULLSCREEN IMAGE POPUP ===== */
-.image-popup-overlay{
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.95);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:999999;
-}
-
-.image-popup-overlay.active{
-  display:flex;
-}
-
-.image-popup-overlay img{
-  max-width:95%;
-  max-height:95%;
-  border-radius:12px;
-}
-
-.image-popup-close{
-  position:absolute;
-  top:20px;
-  right:20px;
-  width:45px;
-  height:45px;
-  border:none;
-  border-radius:50%;
-  font-size:28px;
-  cursor:pointer;
-  background:white;
-  color:black;
-}
-
-</style>
-
-
-
-
-<div class="image-popup-overlay" id="imagePopupOverlay">
-  <button class="image-popup-close" onclick="closeImagePopup()">×</button>
-  <img id="popupImage" src="">
-</div>
-
-
-<script>
-function openImagePopup(src){
-  document.getElementById('popupImage').src = src;
-  document.getElementById('imagePopupOverlay').classList.add('active');
-}
-
-function closeImagePopup(){
-  document.getElementById('imagePopupOverlay').classList.remove('active');
-}
-
-document.addEventListener('click', function(e){
-
-  const img = e.target.closest('img');
-
-  if(
-    img &&
-    img.src &&
-    (
-      img.src.startsWith('data:image') ||
-      img.src.includes('.jpg') ||
-      img.src.includes('.png') ||
-      img.src.includes('.jpeg') ||
-      img.classList.contains('avatar') === false
-    )
-  ){
-    openImagePopup(img.src);
+  <!-- Mobile cache cleanup: remove the old service worker/PWA cache that could keep serving a stale page on phones. -->
+<script id="swami-mobile-cache-cleanup">
+(function () {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function (registrations) {
+      registrations.forEach(function (registration) { registration.unregister(); });
+    }).catch(function () {});
   }
-
-  if(e.target.id === 'imagePopupOverlay'){
-    closeImagePopup();
+  if ('caches' in window) {
+    caches.keys().then(function (names) {
+      names.forEach(function (name) {
+        if (/swami|sms|pwa/i.test(name)) caches.delete(name);
+      });
+    }).catch(function () {});
   }
-
-});
+})();
 </script>
-
-
-  <!-- BULK REMINDER MODAL -->
-  <div class="modal-overlay" id="bulk-reminder-modal" style="z-index:1000;">
-    <div class="modal" style="max-width:560px;max-height:88vh;display:flex;flex-direction:column;">
-      <div class="modal-header" style="flex-shrink:0;">
-        <div class="modal-title">💬 Send WhatsApp Reminders</div>
-        <button class="close-btn" onclick="closeBulkModal()">×</button>
-      </div>
-
-      <!-- Progress bar -->
-      <div id="bulk-progress-wrap" style="display:none;flex-shrink:0;padding:0 0 14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <span style="font-size:12px;font-weight:600;color:var(--text2);" id="bulk-progress-label">Sending 0 / 0</span>
-          <span style="font-size:11px;color:var(--text3);" id="bulk-progress-eta"></span>
-        </div>
-        <div style="background:var(--bg4);border-radius:20px;height:6px;overflow:hidden;">
-          <div id="bulk-progress-bar" style="height:100%;background:var(--accent);border-radius:20px;width:0%;transition:width .4s;"></div>
-        </div>
-      </div>
-
-      <!-- Student list -->
-      <div id="bulk-student-list" style="flex:1;overflow-y:auto;margin-bottom:14px;display:flex;flex-direction:column;gap:8px;"></div>
-
-      <!-- Footer -->
-      <div style="flex-shrink:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <div style="flex:1;font-size:12px;color:var(--text3);" id="bulk-footer-note">
-          Each message opens WhatsApp one by one with a short pause between each.
-        </div>
-        <button class="btn btn-ghost" onclick="closeBulkModal()" id="bulk-cancel-btn">Cancel</button>
-        <button class="btn btn-primary" onclick="startBulkSend()" id="bulk-send-btn" style="background:#25D366;border-color:#25D366;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:5px;"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.118 1.528 5.849L.057 23.974l6.306-1.654A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.002-1.368l-.359-.213-3.722.976.994-3.634-.234-.372A9.818 9.818 0 012.182 12C2.182 6.58 6.58 2.182 12 2.182S21.818 6.58 21.818 12 17.42 21.818 12 21.818z"/></svg>
-          Send All Now
-        </button>
-      </div>
-    </div>
-  </div>
-
-
-<!-- ===== PWA: MANIFEST + SERVICE WORKER + INSTALL PROMPT ===== -->
-<style>
-  #pwa-install-bar {
-    display: none;
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
-    background: linear-gradient(135deg, #7c6fff 0%, #a59bff 100%);
-    color: white; padding: 14px 20px;
-    align-items: center; justify-content: space-between; gap: 12px;
-    box-shadow: 0 -4px 24px rgba(124,111,255,0.4);
-    font-family: 'DM Sans', sans-serif;
-  }
-  #pwa-install-bar.show { display: flex; animation: slideUp 0.3s ease; }
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  #pwa-install-bar .pwa-text { font-size: 13px; font-weight: 500; flex: 1; }
-  #pwa-install-bar .pwa-text strong { display: block; font-size: 15px; font-weight: 700; }
-  #pwa-install-btn {
-    background: white; color: #7c6fff; border: none; border-radius: 20px;
-    padding: 9px 20px; font-size: 13px; font-weight: 700; cursor: pointer;
-    white-space: nowrap; font-family: 'DM Sans', sans-serif;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  }
-  #pwa-dismiss-btn {
-    background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 50%;
-    width: 28px; height: 28px; font-size: 16px; cursor: pointer; display: flex;
-    align-items: center; justify-content: center; flex-shrink: 0;
-  }
-</style>
-
-<!-- Install Banner -->
-<div id="pwa-install-bar">
-  <div class="pwa-text">
-    <strong>📲 Install Swami Abhyasika</strong>
-    Add to your home screen for quick access — works offline too!
-  </div>
-  <button id="pwa-install-btn">Install App</button>
-  <button id="pwa-dismiss-btn">×</button>
-</div>
-
-<script>
-  // ── 1. Inject Web App Manifest dynamically ──
-  (function() {
-    const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-      <rect width="512" height="512" rx="80" fill="#080a10"/>
-      <rect width="512" height="512" rx="80" fill="url(#g)"/>
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#7c6fff"/>
-          <stop offset="100%" stop-color="#a59bff"/>
-        </linearGradient>
-      </defs>
-      <text x="256" y="340" font-size="280" text-anchor="middle" font-family="serif" fill="white">स</text>
-    </svg>`;
-
-    const svgBlob = new Blob([iconSvg], {type: 'image/svg+xml'});
-    const iconUrl = URL.createObjectURL(svgBlob);
-
-    const manifest = {
-      name: 'Swami Abhyasika SMS',
-      short_name: 'Swami SMS',
-      description: 'Student Management System for Swami Abhyasika',
-      start_url: '.',
-      display: 'standalone',
-      background_color: '#080a10',
-      theme_color: '#7c6fff',
-      orientation: 'portrait-primary',
-      icons: [
-        { src: iconUrl, sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
-        { src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
-      ],
-      categories: ['education', 'productivity'],
-      lang: 'en-IN'
-    };
-
-    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    document.getElementById('pwa-manifest').href = url;
-  })();
-
-  // ── 2. Register Service Worker (inline via blob) ──
-  (function() {
-    const swCode = `
-const CACHE = 'swami-sms-v1';
-const ASSETS = ['/'];
-
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(() => {})
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', e => {
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
-  );
-});
-`;
-    const swBlob = new Blob([swCode], { type: 'application/javascript' });
-    const swUrl  = URL.createObjectURL(swBlob);
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register(swUrl, { scope: '/' })
-        .catch(function() {
-          // SW scope may differ when opened as local file — that's OK
-        });
-    }
-  })();
-
-  // ── 3. Install Prompt ──
-  let _deferredPrompt = null;
-
-  window.addEventListener('beforeinstallprompt', function(e) {
-    e.preventDefault();
-    _deferredPrompt = e;
-    // Show banner after 2 seconds
-    setTimeout(function() {
-      document.getElementById('pwa-install-bar').classList.add('show');
-    }, 2000);
-  });
-
-  document.getElementById('pwa-install-btn').addEventListener('click', function() {
-    if (!_deferredPrompt) return;
-    _deferredPrompt.prompt();
-    _deferredPrompt.userChoice.then(function(result) {
-      if (result.outcome === 'accepted') {
-        showToast('App installed! Find it on your home screen 🎉', 'green');
-      }
-      _deferredPrompt = null;
-      document.getElementById('pwa-install-bar').classList.remove('show');
-    });
-  });
-
-  document.getElementById('pwa-dismiss-btn').addEventListener('click', function() {
-    document.getElementById('pwa-install-bar').classList.remove('show');
-    localStorage.setItem('pwa-dismissed', '1');
-  });
-
-  window.addEventListener('appinstalled', function() {
-    document.getElementById('pwa-install-bar').classList.remove('show');
-    showToast('Swami Abhyasika installed successfully! 🎉', 'green');
-  });
-</script>
-
 
 <!-- COMMAND PALETTE -->
 <style>
