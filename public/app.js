@@ -203,6 +203,7 @@
       );
       if (!result) return;
       students = [];
+      bSaveBookings([]);
       save();
       updateReminderBadge();
       showToast('All data cleared', 'red');
@@ -348,7 +349,8 @@
       const btnNewStudent = document.getElementById('btn-new-student');
       if (btnNewStudent) btnNewStudent.style.display = 'flex';
 
-      if (id === 'statistics') renderDashboard();
+      if (id === 'statistics') { renderDashboard(); setTimeout(renderCashClosing, 0); }
+      if (id === 'settings') setTimeout(renderDeleteApprovals, 0);
       if (id === 'basement') setTimeout(bInit, 50);
       if (id === 'admissions') renderStudentTable();
       if (id === 'fees') renderFeeTable();
@@ -550,6 +552,9 @@
       const content = document.getElementById('student-details-content');
       const { elapsed, totalMonths, perMonth } = getSubscriptionBalance(s);
       const st = getStatus(s);
+      const bks = bGetBookings ? bGetBookings() : [];
+      const activeSeat = bks.find(b => b.studentId === s.id && b.status === 'active');
+      const seatDisplay = activeSeat ? ('#' + activeSeat.seat) : 'Not booked';
       
       let avatarHtml = `<div class="avatar" style="width:64px;height:64px;font-size:24px;background:var(--accent-bg);color:var(--accent)">${getInitials(s.name)}</div>`;
       if (s.photo) {
@@ -584,7 +589,7 @@
           <div><strong>Conditions:</strong> ${s.conditions || s.parentName || 'N/A'}</div>
           <div><strong>Address:</strong> ${s.address || 'N/A'}</div>
           <div><strong>Subscription:</strong> ${formatCurrency(s.totalFees)}</div>
-          <div><strong>Monthly Rate:</strong> ${formatCurrency(perMonth)}/mo</div>
+          <div><strong>Seat No:</strong> ${seatDisplay}</div>
           <div><strong>Used:</strong> ${elapsed} of ${totalMonths} months</div>
           <div><strong>Due Date:</strong> ${s.dueDate || 'N/A'}</div>
         </div>
@@ -634,10 +639,10 @@
     function renderStudentTable() {
       const courseFilter = document.getElementById('filter-course').value;
       const statusFilter = document.getElementById('filter-status').value;
-      const courses = [...new Set(students.map(s => s.course))];
+      const courses = [...new Set(students.map(s => s.course).filter(Boolean))];
       const sel = document.getElementById('filter-course');
-      const cur = sel.value;
-      sel.innerHTML = '<option value="">All Courses</option>' + courses.map(c => `<option ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
+      const cur = courseFilter;
+      sel.innerHTML = '<option value="">All Courses</option>' + courses.map(c => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
 
       let filtered = students.filter(s => {
         const st = getStatus(s);
@@ -655,19 +660,25 @@
       });
 
       const tbody = document.getElementById('student-table');
-      if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3)">No students found.</td></tr>'; return; }
+      if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text3)">No students found.</td></tr>'; return; }
       tbody.innerHTML = filtered.map((s, i) => {
         const status = getStatus(s);
         const isOverdue = status === 'Overdue';
+        const activeSeat = (typeof bGetBookings === 'function' ? bGetBookings() : []).find(b => b.studentId === s.id && b.status === 'active');
+        const seatDisplay = activeSeat ? `#${activeSeat.seat}` : '—';
+        const avatarHtml = s.photo
+          ? `<div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)};overflow:hidden"><img src="${s.photo}" alt="${s.name}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
+          : `<div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)}">${getInitials(s.name)}</div>`;
         return `<tr onclick="showStudentDetails('${s.id}')" style="cursor:pointer">
       <td><div class="student-cell">
-        <div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)}">${getInitials(s.name)}</div>
+        ${avatarHtml}
         <div><div class="student-name">${s.name}</div><div class="student-id">${s.id}</div></div>
       </div></td>
       <td style="color:var(--text2)">${s.phone}</td>
       <td><span class="status-pill badge-purple">${s.course}</span></td>
       <td>₹${s.totalFees.toLocaleString()}</td>
       <td style="font-size:12px;color:${isOverdue ? 'var(--red)' : 'var(--text2)'};font-weight:${isOverdue ? '600' : '400'}">${isOverdue ? '⚠ ' : ''}${s.dueDate || '—'}</td>
+      <td style="font-size:12px;color:var(--text2);font-weight:600">${seatDisplay}</td>
       <td>${statusBadge(status)}</td>
       <td><div class="action-btns">
         <button class="icon-btn" onclick="event.stopPropagation(); openPaymentModal('${s.id}')" title="Record Payment">
@@ -696,23 +707,29 @@
         return status !== 'Inactive';
       });
       const tbody = document.getElementById('fee-table');
-      if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3)">No records found.</td></tr>'; return; }
+      if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text3)">No records found.</td></tr>'; return; }
       tbody.innerHTML = filtered.map((s, i) => {
         const status = getStatus(s);
         const isOverdue = status === 'Overdue';
         const paid = (s.payments || []).reduce((a, p) => a + (p.amount || 0), 0);
+        const activeSeat = (typeof bGetBookings === 'function' ? bGetBookings() : []).find(b => b.studentId === s.id && b.status === 'active');
+        const seatDisplay = activeSeat ? `#${activeSeat.seat}` : '—';
+        const avatarHtml = s.photo
+          ? `<div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)};overflow:hidden"><img src="${s.photo}" alt="${s.name}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
+          : `<div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)}">${getInitials(s.name)}</div>`;
         const rowStyle = isOverdue
           ? 'background:rgba(239,68,68,0.07);border-left:3px solid var(--red);'
           : '';
         return `<tr style="${rowStyle}">
       <td><div class="student-cell">
-        <div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)}">${getInitials(s.name)}</div>
+${avatarHtml}
         <div><div class="student-name" style="${isOverdue ? 'color:var(--red);' : ''}">${s.name}</div><div class="student-id">${s.id}</div></div>
       </div></td>
       <td style="font-size:12px;color:var(--text2)">${s.course}</td>
       <td>₹${s.totalFees.toLocaleString()}</td>
       <td style="color:var(--green);font-weight:600">₹${paid.toLocaleString()}</td>
       <td style="font-size:12px;color:${isOverdue ? 'var(--red)' : 'var(--text3)'};font-weight:${isOverdue ? '600' : '400'}">${isOverdue ? '⚠ ' : ''}${s.dueDate || '—'}</td>
+      <td style="font-size:12px;color:var(--text2);font-weight:600">${seatDisplay}</td>
       <td>${statusBadge(status)}</td>
       <td><button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="openPaymentModal('${s.id}')">Pay</button></td>
     </tr>`;
@@ -790,16 +807,23 @@
       // ── Recent admissions table ──
       const recent = [...students].filter(s=>getStatus(s)!=='Inactive').slice(-5).reverse();
       const tbody  = document.getElementById('recent-table');
-      if(!recent.length) tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text3)">No students yet.</td></tr>';
-      else tbody.innerHTML = recent.map((s,i)=>`<tr>
+      if(!recent.length) tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text3)">No students yet.</td></tr>';
+      else tbody.innerHTML = recent.map((s,i)=>{
+        const paid = (s.payments || []).reduce((sum,p)=>sum + (Number(p.amount)||0), 0);
+        const avatar = s.photo
+          ? `<div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)};overflow:hidden"><img src="${s.photo}" alt="${s.name}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
+          : `<div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)}">${getInitials(s.name)}</div>`;
+        return `<tr>
         <td><div class="student-cell">
-          <div class="avatar" style="background:${getColor(i)}20;color:${getColor(i)}">${getInitials(s.name)}</div>
+          ${avatar}
           <div><div class="student-name">${s.name}</div><div class="student-id">${s.id}</div></div>
         </div></td>
         <td>${s.course}</td>
         <td style="color:var(--text2)">${s.admissionDate}</td>
+        <td style="font-weight:700;color:var(--green)">${formatCurrency(paid)}</td>
         <td>${statusBadge(getStatus(s))}</td>
-      </tr>`).join('');
+      </tr>`;
+      }).join('');
 
       // ── Payment method breakdown (period-filtered) ──
       const METHOD_ICONS  = {Cash:'💵',UPI:'📱','Online Transfer':'🏦',Cheque:'📄',DD:'📋',Card:'💳'};
@@ -1000,13 +1024,13 @@
         needReminder = needReminder.filter(s => {
           if (!s.dueDate) return false;
           const due = new Date(s.dueDate); due.setHours(0,0,0,0);
-          return due < today;
+          return due <= today;
         });
       } else if (_reminderFilter === 'remaining') {
         needReminder = needReminder.filter(s => {
           if (!s.dueDate) return false;
           const due = new Date(s.dueDate); due.setHours(0,0,0,0);
-          return due >= today;
+          return due > today;
         });
       }
 
@@ -1016,7 +1040,7 @@
         return dueA - dueB;
       });
 
-      document.getElementById('reminder-badge').textContent = students.filter(s => getStatus(s) === 'Overdue').length;
+      document.getElementById('reminder-badge').textContent = students.filter(s => { if (!s.dueDate || getStatus(s) === 'Inactive') return false; const due = new Date(s.dueDate + 'T00:00:00'); due.setHours(0,0,0,0); return due <= today; }).length;
 
       const list = document.getElementById('reminders-list');
 
@@ -1056,7 +1080,7 @@
           ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);background:var(--red-bg);padding:2px 8px;border-radius:6px;">OVERDUE</span>`
           : _reminderFilter === 'remaining'
           ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--green);background:var(--green-bg);padding:2px 8px;border-radius:6px;">ACTIVE</span>`
-          : (diffDays !== null && diffDays < 0)
+          : (diffDays !== null && diffDays <= 0)
             ? `<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);background:var(--red-bg);padding:2px 8px;border-radius:6px;">OVERDUE</span>`
             : `<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--green);background:var(--green-bg);padding:2px 8px;border-radius:6px;">ACTIVE</span>`;
 
@@ -1119,6 +1143,8 @@
       payingStudentId = id;
       const s = students.find(x => x.id === id);
       payingStudentGender = s.gender || 'Male';
+      const payBtn = document.getElementById('record-payment-btn');
+      if (payBtn) { payBtn.disabled = false; payBtn.innerHTML = '&#128190; Record Payment &amp; Book Seat'; }
       document.getElementById('payment-student-info').innerHTML =
         '<strong>'+s.name+'</strong> ('+s.id+') \u00b7 '+s.course
         +'<br>Subscription: \u20b9'+s.totalFees.toLocaleString()
@@ -1169,9 +1195,9 @@
 
     function savePayment() {
       const amount = Number(document.getElementById('pay-amount').value);
-      if(!Number.isFinite(amount) || amount <= 0) { showToast('Enter a valid amount', 'red'); return; }
+      if(!Number.isFinite(amount) || amount <= 0) { showToast('Enter a valid amount', 'red'); return false; }
       const nextDueInput = document.getElementById('pay-next-due-date');
-      if(!nextDueInput || !nextDueInput.value) { showToast('Please specify Next Due Date or Months', 'red'); return; }
+      if(!nextDueInput || !nextDueInput.value) { showToast('Please specify Next Due Date or Months', 'red'); return false; }
       const s          = students.find(x => x.id === payingStudentId);
       const method     = document.getElementById('pay-method').value;
       const date       = document.getElementById('pay-date').value;
@@ -1193,18 +1219,25 @@
       generateReceipt(s, amount, date, method, notes);
       renderFeeTable();
       updateReminderBadge();
+      // From this point on the payment itself is already saved — every
+      // remaining exit path (including seat-step validation failures)
+      // returns true, so the caller knows not to allow another click that
+      // would record a second duplicate payment.
 
       // ── Inline seat booking ──
       const seatEnabled = document.getElementById('pay-seat-enable')?.checked;
       if(seatEnabled) {
-        if(!_paySlots || _paySlots.length === 0) { showToast('Please select a time slot', 'amber'); return; }
-        if(!_paySeat) { showToast('Please select a seat from the map', 'amber'); return; }
+        if(!_paySlots || _paySlots.length === 0) { showToast('Please select a time slot', 'amber'); return true; }
+        if(!_paySeat) { showToast('Please select a seat from the map', 'amber'); return true; }
         const bks = bGetBookings();
         const existing = bks.find(b => b.studentId===s.id && b.seat===_paySeat && (b.status==='active'||b.status==='expired'));
         if(existing) {
           const updated = bks.map(b => {
             if(b.studentId===s.id && b.seat===_paySeat && (b.status==='active'||b.status==='expired'))
-              return {...b, fromDate:newFromDate, dueDate:newDueDate,
+              // Renewal must extend the existing booking, not move its start date
+              // forward. Otherwise an advance payment for next month makes the
+              // current month appear vacant on the seat map.
+              return {...b, fromDate:(b.fromDate||b.date||newFromDate), dueDate:newDueDate,
                 slotIds:_paySlots.map(sl=>sl.id), slotLabels:_paySlots.map(sl=>sl.label),
                 slotTimes:_paySlots.map(sl=>sl.time), status:'active'};
             return b;
@@ -1217,7 +1250,7 @@
             _paySlots.some(sl=>(b.slotIds||[b.slotId]).includes(sl.id)) &&
             !((newDueDate < (b.fromDate||b.date||'')) || (newFromDate > (b.dueDate||b.date||'')))
           );
-          if(clash){ showToast('Seat #'+_paySeat+' already taken for this period!','amber'); return; }
+          if(clash){ showToast('Seat #'+_paySeat+' already taken for this period!','amber'); return true; }
           const cleared = bks.map(b=>(b.studentId===s.id&&b.status==='active')?{...b,status:'expired'}:b);
           cleared.push({
             id:'BL'+Date.now(), fromDate:newFromDate, dueDate:newDueDate,
@@ -1237,6 +1270,7 @@
         }
         _paySlots=[]; _paySeat=null;
       }
+      return true;
     }
 
     function calcNextDueDate() {
@@ -1346,10 +1380,14 @@
       window.open('https://wa.me/' + num + '?text=' + msg, '_blank');
     }
 
-    async function deleteStudent(id) {
+    async function performApprovedDelete(id) {
       const result = await customConfirm('Delete this student? This action cannot be undone.', 'Delete Student', 'Delete', 'var(--red)');
       if (!result) return;
       students = students.filter(s => s.id !== id);
+      // Release any seat booking tied to this student so the seat map shows
+      // it as vacant instead of leaving a stale/ghost occupant behind.
+      const bks = bGetBookings().map(b => (b.studentId === id && b.status === 'active') ? {...b, status: 'cancelled'} : b);
+      bSaveBookings(bks);
       save();
       renderStudentTable();
       updateReminderBadge();
@@ -1527,8 +1565,13 @@
     })();
 
     // ── Font Size ─────────────────────────────────────────────────────────
+    // Note: nearly every element in this UI has its own explicit px font-size,
+    // so changing document.body.style.fontSize alone has no visible effect
+    // (more-specific rules win). Using zoom scales the whole page proportionally
+    // regardless of those hardcoded sizes.
     function setFontSize(px) {
-      document.body.style.fontSize = px + 'px';
+      const scale = px / 14; // 14 = baseline "Medium"
+      document.body.style.zoom = scale;
       localStorage.setItem('edutrack-fontsize', px);
       ['fs-small','fs-medium','fs-large'].forEach(id => {
         const el = document.getElementById(id);
@@ -3029,3 +3072,50 @@
       updateReminderBadge();
       renderDashboard();
     });
+
+
+// ================= ADD-ON FEATURES: CASH CLOSING, DELETE APPROVAL =================
+function localDateKey(d) { const x=d||new Date(); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
+function paymentDateKey(p) { return String(p && (p.date || p.paymentDate || p.createdAt) || '').slice(0,10); }
+function getPaymentsForDate(dateKey) {
+  const out=[]; students.forEach(s=>(s.payments||[]).forEach(p=>{ if(paymentDateKey(p)===dateKey) out.push({...p,studentName:s.name,studentId:s.id}); })); return out;
+}
+function renderCashClosing() {
+  const dateEl=document.getElementById('cash-close-date'); if(!dateEl) return; if(!dateEl.value) dateEl.value=localDateKey();
+  const payments=getPaymentsForDate(dateEl.value);
+  let cash=0, digital=0, total=0;
+  payments.forEach(p=>{ const a=Number(p.amount)||0; total+=a; const m=String(p.method||p.paymentMethod||'').toLowerCase(); if(m.includes('cash')) cash+=a; else digital+=a; });
+  const opening=Number(document.getElementById('cash-opening')?.value)||0;
+  const actualRaw=document.getElementById('cash-actual')?.value||''; const actual=Number(actualRaw)||0;
+  const expected=opening+cash; const diff=actualRaw===''?null:actual-expected;
+  document.getElementById('cash-close-summary').innerHTML = [
+    ['Cash Collected',cash,'var(--green)'],['UPI / Online',digital,'var(--accent2)'],['Total Collection',total,'var(--text)'],['Expected Closing Cash',expected,'var(--amber)']
+  ].map(x=>`<div class="stat-card"><div class="stat-label">${x[0]}</div><div class="stat-value" style="font-size:23px;color:${x[2]}">${formatCurrency(x[1])}</div></div>`).join('');
+  const r=document.getElementById('cash-close-result');
+  if(diff===null) r.textContent='Enter actual closing cash to calculate difference.';
+  else { r.textContent=(diff===0?'Balanced':diff<0?'Cash Short: '+formatCurrency(Math.abs(diff)):'Cash Excess: '+formatCurrency(diff)); r.style.color=diff===0?'var(--green)':'var(--red)'; }
+  renderCashClosingHistory();
+}
+function saveCashClosing(){
+  const date=document.getElementById('cash-close-date').value; const actualRaw=document.getElementById('cash-actual').value; if(actualRaw==='') return showToast('Enter actual closing cash','red');
+  const payments=getPaymentsForDate(date); let cash=0,digital=0,total=0; payments.forEach(p=>{const a=Number(p.amount)||0;total+=a;String(p.method||p.paymentMethod||'').toLowerCase().includes('cash')?cash+=a:digital+=a;});
+  const opening=Number(document.getElementById('cash-opening').value)||0, actual=Number(actualRaw)||0, expected=opening+cash, difference=actual-expected, notes=document.getElementById('cash-notes').value.trim();
+  const closedBy=(document.getElementById('cash-closed-by')?.value||'').trim();
+  if(!closedBy) return showToast('Enter the name of the person closing cash','red');
+  if(difference!==0 && !notes) return showToast('Enter a reason for the cash difference','red');
+  let list=JSON.parse(localStorage.getItem('edu_cash_closings')||'[]'); const rec={date,opening,cash,digital,total,expected,actual,difference,notes,closedBy,status:difference===0?'Balanced':difference<0?'Cash Short':'Cash Excess',closedAt:new Date().toISOString()};
+  const i=list.findIndex(x=>x.date===date); if(i>=0) list[i]=rec; else list.unshift(rec); localStorage.setItem('edu_cash_closings',JSON.stringify(list)); showToast('Cash closing report saved','green'); renderCashClosing();
+}
+function renderCashClosingHistory(){ const el=document.getElementById('cash-close-history'); if(!el)return; const list=JSON.parse(localStorage.getItem('edu_cash_closings')||'[]').slice(0,30); el.innerHTML=list.length?list.map(x=>`<tr><td>${x.date}</td><td>${formatCurrency(x.cash)}</td><td>${formatCurrency(x.digital)}</td><td>${formatCurrency(x.total)}</td><td style="color:${x.difference===0?'var(--green)':'var(--red)'}">${formatCurrency(x.difference)}</td><td>${x.closedBy||'Admin'}</td><td>${x.status}</td></tr>`).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No closed days yet.</td></tr>'; }
+
+function saveOwnerDeletePin(){ const pin=document.getElementById('owner-delete-pin').value.trim(); if(!/^\d{4,12}$/.test(pin)) return showToast('PIN must contain 4 to 12 digits','red'); localStorage.setItem('edu_owner_delete_pin',pin); document.getElementById('owner-delete-pin').value=''; showToast('Owner delete PIN saved','green'); }
+async function deleteStudent(id){
+  const s=students.find(x=>x.id===id); if(!s)return; const reason=prompt('Reason for deleting '+s.name+':'); if(reason===null)return; if(!reason.trim())return showToast('Delete reason is required','red');
+  let reqs=JSON.parse(localStorage.getItem('edu_delete_requests')||'[]'); if(reqs.some(r=>r.studentId===id&&r.status==='Pending'))return showToast('A delete request is already pending','amber');
+  reqs.unshift({id:'DEL-'+Date.now(),studentId:id,studentName:s.name,reason:reason.trim(),requestedAt:new Date().toISOString(),status:'Pending'}); localStorage.setItem('edu_delete_requests',JSON.stringify(reqs)); showToast('Delete request sent for owner approval','amber'); renderDeleteApprovals();
+}
+function renderDeleteApprovals(){ const el=document.getElementById('delete-approval-list'); if(!el)return; const list=JSON.parse(localStorage.getItem('edu_delete_requests')||'[]'); el.innerHTML=list.length?list.map(r=>`<tr><td>${new Date(r.requestedAt).toLocaleString()}</td><td>${r.studentName}<div style="font-size:10px;color:var(--text3)">${r.studentId}</div></td><td>${r.reason}</td><td>${r.status}</td><td>${r.status==='Pending'?`<button class="btn btn-primary" style="padding:6px 9px" onclick="approveDeleteRequest('${r.id}')">Approve</button> <button class="btn btn-secondary" style="padding:6px 9px" onclick="rejectDeleteRequest('${r.id}')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">No delete requests.</td></tr>'; }
+async function approveDeleteRequest(reqId){ const saved=localStorage.getItem('edu_owner_delete_pin'); if(!saved)return showToast('Set the owner PIN first','red'); const entered=prompt('Enter owner PIN to approve deletion:'); if(entered!==saved)return showToast('Incorrect owner PIN','red'); let reqs=JSON.parse(localStorage.getItem('edu_delete_requests')||'[]'); const r=reqs.find(x=>x.id===reqId); if(!r||r.status!=='Pending')return; r.status='Approved';r.decidedAt=new Date().toISOString();localStorage.setItem('edu_delete_requests',JSON.stringify(reqs)); await performApprovedDelete(r.studentId); renderDeleteApprovals(); }
+function rejectDeleteRequest(reqId){ let reqs=JSON.parse(localStorage.getItem('edu_delete_requests')||'[]'); const r=reqs.find(x=>x.id===reqId); if(r){r.status='Rejected';r.decidedAt=new Date().toISOString();localStorage.setItem('edu_delete_requests',JSON.stringify(reqs));renderDeleteApprovals();showToast('Delete request rejected','green');} }
+
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{renderDeleteApprovals();},300);});

@@ -31,6 +31,53 @@
   button:disabled { opacity: 0.6; cursor: default; }
   #err { color: #ff6b6b; font-size: 13px; margin-bottom: 12px; display: none; }
 </style>
+<style id="swami-login-ui-refresh">
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap');
+  :root { --accent:#23c483; --accent2:#7ee7b7; }
+  body {
+    position: relative; overflow: hidden; font-family:'DM Sans',sans-serif;
+    background:
+      radial-gradient(circle at 18% 18%, rgba(35,196,131,.16), transparent 28%),
+      radial-gradient(circle at 82% 82%, rgba(245,158,11,.08), transparent 30%),
+      #080a10;
+  }
+  body::before {
+    content:''; position:fixed; inset:-30%; pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+    background-size:42px 42px; transform:rotate(-8deg);
+  }
+  .card {
+    position:relative; max-width:390px; padding:38px 36px 34px;
+    border-radius:24px; border:1px solid rgba(255,255,255,.10);
+    background:linear-gradient(145deg,rgba(23,27,37,.94),rgba(12,14,21,.97));
+    box-shadow:0 30px 90px rgba(0,0,0,.52),0 0 0 1px rgba(35,196,131,.03);
+    backdrop-filter:blur(18px);
+  }
+  .card::before {
+    content:''; display:block; width:70px; height:70px; margin:0 auto 18px;
+    border-radius:20px; background:url('/assets/swami-abhyasika-logo.jpg') center/cover no-repeat;
+    border:1px solid rgba(255,255,255,.12); box-shadow:0 12px 30px rgba(35,196,131,.20);
+  }
+  h1 { font-family:'Syne',sans-serif; text-align:center; font-size:24px; letter-spacing:-.03em; }
+  p.sub { text-align:center; margin-bottom:28px; }
+  label { color:#aab3c6; margin-bottom:8px; }
+  input {
+    min-height:46px; padding:12px 14px; margin-bottom:18px;
+    background:rgba(255,255,255,.04); border-color:rgba(255,255,255,.09); border-radius:11px;
+    transition:border .18s,box-shadow .18s,background .18s;
+  }
+  input:hover { border-color:rgba(255,255,255,.17); }
+  input:focus { background:#171b25; border-color:var(--accent); box-shadow:0 0 0 4px rgba(35,196,131,.11); }
+  button {
+    min-height:47px; border-radius:11px;
+    background:linear-gradient(135deg,#18aa6d,#37d798);
+    box-shadow:0 12px 28px rgba(35,196,131,.24); transition:transform .18s,box-shadow .18s,filter .18s;
+  }
+  button:hover { background:linear-gradient(135deg,#20b978,#43dfa1); transform:translateY(-1px); box-shadow:0 16px 34px rgba(35,196,131,.30); }
+  #err { padding:10px 12px; border-radius:9px; background:rgba(255,107,107,.09); border:1px solid rgba(255,107,107,.18); }
+  @media(max-width:480px){ .card{margin:16px;padding:30px 22px;}.card::before{width:62px;height:62px;} }
+</style>
+
 </head>
 <body>
   <form class="card" id="login-form">
