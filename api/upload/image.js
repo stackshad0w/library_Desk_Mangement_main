@@ -1,6 +1,9 @@
 const { requireAuth } = require('../../lib/auth');
 const cloudinary = require('../../lib/cloudinary');
 
+const MAX_IMAGE_BYTES = 250 * 1024;
+const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -10,20 +13,33 @@ module.exports = async (req, res) => {
   if (!requireAuth(req, res)) return;
 
   const { image } = req.body || {};
-  if (typeof image !== 'string' || !image.startsWith('data:image')) {
-    return res.status(400).json({ message: 'image must be a data:image/... base64 URI' });
+  const match = typeof image === 'string'
+    ? image.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i)
+    : null;
+
+  if (!match || !ALLOWED_TYPES.has(match[1].toLowerCase())) {
+    return res.status(400).json({ message: 'Please upload a valid JPG, PNG or WEBP image.' });
+  }
+
+  const base64 = match[2].replace(/\s/g, '');
+  const padding = (base64.match(/=*$/) || [''])[0].length;
+  const estimatedBytes = Math.floor((base64.length * 3) / 4) - padding;
+
+  if (estimatedBytes > MAX_IMAGE_BYTES) {
+    return res.status(413).json({
+      message: 'Image is larger than 250 KB. Please let the app compress it and try again.'
+    });
   }
 
   if (!cloudinary.configured()) {
-    // No Cloudinary credentials set — tell the caller so the client-side
-    // shim can fall back to storing the original base64 value untouched.
-    return res.status(503).json({ message: 'Cloudinary is not configured on the server' });
+    return res.status(503).json({ message: 'Image storage is temporarily unavailable.' });
   }
 
   try {
     const url = await cloudinary.uploadDataUrl(image);
-    res.json({ url });
+    return res.json({ url });
   } catch (err) {
-    res.status(502).json({ message: err.message || 'Upload failed' });
+    console.error('Cloudinary image upload failed:', err);
+    return res.status(502).json({ message: 'Image upload failed. Please try again.' });
   }
 };

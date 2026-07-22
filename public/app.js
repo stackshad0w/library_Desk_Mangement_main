@@ -1,3 +1,65 @@
+    async function compressStudentImage(file) {
+      const DIRECT_UPLOAD_MAX_BYTES = 249 * 1024;
+      const TARGET_MAX_BYTES = 250 * 1024;
+      const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+
+      if (!file || !allowed.includes(file.type)) {
+        throw new Error('Only JPG, PNG and WEBP images are allowed.');
+      }
+
+      // Images below 249 KB are uploaded without changing them.
+      if (file.size < DIRECT_UPLOAD_MAX_BYTES) return file;
+
+      const bitmap = await createImageBitmap(file);
+      let width = bitmap.width;
+      let height = bitmap.height;
+      const maxDimension = 1200;
+      const initialScale = Math.min(1, maxDimension / Math.max(width, height));
+      width = Math.max(1, Math.round(width * initialScale));
+      height = Math.max(1, Math.round(height * initialScale));
+
+      let canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      let ctx = canvas.getContext('2d', { alpha: false });
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close?.();
+
+      let blob = null;
+      let quality = 0.90;
+
+      while (quality >= 0.42) {
+        blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+        if (blob && blob.size <= TARGET_MAX_BYTES) break;
+        quality -= 0.06;
+      }
+
+      // If quality reduction is not enough, reduce dimensions gradually.
+      while (blob && blob.size > TARGET_MAX_BYTES && canvas.width > 320 && canvas.height > 320) {
+        const smaller = document.createElement('canvas');
+        smaller.width = Math.max(320, Math.round(canvas.width * 0.82));
+        smaller.height = Math.max(320, Math.round(canvas.height * 0.82));
+        const smallerCtx = smaller.getContext('2d', { alpha: false });
+        smallerCtx.fillStyle = '#fff';
+        smallerCtx.fillRect(0, 0, smaller.width, smaller.height);
+        smallerCtx.drawImage(canvas, 0, 0, smaller.width, smaller.height);
+        canvas = smaller;
+        blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.55));
+      }
+
+      if (!blob || blob.size > TARGET_MAX_BYTES) {
+        throw new Error('Could not compress this image to 250 KB. Please choose a smaller image.');
+      }
+
+      return new File(
+        [blob],
+        file.name.replace(/\.[^.]+$/, '') + '.jpg',
+        { type: 'image/jpeg', lastModified: Date.now() }
+      );
+    }
+
     function loadStudents() {
       const raw = JSON.parse(localStorage.getItem('edu_students') || '[]');
       return raw.map(s => {
@@ -341,7 +403,7 @@
         'admission-form': 'New Admission', fees: 'Fee Management',
         reminders: 'Reminders', export: 'Export Data',
 
-        statistics: 'Statistics', settings: 'Settings', basement: 'Basement Library', floor2: '2nd Floor Library'
+        statistics: 'Statistics', settings: 'Settings', broadcast: 'WhatsApp Broadcast', basement: 'Basement Library', floor2: '2nd Floor Library'
       };
       document.getElementById('page-title').textContent = titles[id] || id;
 
@@ -350,6 +412,7 @@
       if (btnNewStudent) btnNewStudent.style.display = 'flex';
 
       if (id === 'statistics') { renderDashboard(); setTimeout(renderCashClosing, 0); }
+      if (id === 'broadcast') { previewBroadcastRecipients(); renderBroadcastHistory(); }
       if (id === 'settings') setTimeout(renderDeleteApprovals, 0);
       if (id === 'basement') setTimeout(bInit, 50);
       if (id === 'admissions') renderStudentTable();
@@ -371,21 +434,28 @@
 
     let _editingId = null;
 
-    function submitAdmission() {
+    async function submitAdmission() {
       // Handle photo — keep existing if editing and no new file chosen
       const existingStudent = _editingId ? students.find(x => x.id === _editingId) : null;
       let photoData = existingStudent ? (existingStudent.photo || '') : '';
       const photoInput = document.getElementById('f-photo');
+
       if (photoInput.files.length) {
-        const file = photoInput.files[0];
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          photoData = e.target.result;
-          _submitAdmissionWithPhoto(photoData);
-        };
-        reader.readAsDataURL(file);
-        return; // wait for reader
+        try {
+          const originalFile = photoInput.files[0];
+          const preparedFile = await compressStudentImage(originalFile);
+          photoData = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('Could not read the selected image.'));
+            reader.readAsDataURL(preparedFile);
+          });
+        } catch (error) {
+          showToast(error.message || 'Image processing failed', 'red');
+          return;
+        }
       }
+
       _submitAdmissionWithPhoto(photoData);
     }
 
@@ -3074,7 +3144,7 @@ ${avatarHtml}
     });
 
 
-// ================= ADD-ON FEATURES: CASH CLOSING, DELETE APPROVAL =================
+// ================= ADD-ON FEATURES: CASH CLOSING, DELETE APPROVAL, WHATSAPP BROADCAST =================
 function localDateKey(d) { const x=d||new Date(); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
 function paymentDateKey(p) { return String(p && (p.date || p.paymentDate || p.createdAt) || '').slice(0,10); }
 function getPaymentsForDate(dateKey) {
@@ -3118,4 +3188,16 @@ function renderDeleteApprovals(){ const el=document.getElementById('delete-appro
 async function approveDeleteRequest(reqId){ const saved=localStorage.getItem('edu_owner_delete_pin'); if(!saved)return showToast('Set the owner PIN first','red'); const entered=prompt('Enter owner PIN to approve deletion:'); if(entered!==saved)return showToast('Incorrect owner PIN','red'); let reqs=JSON.parse(localStorage.getItem('edu_delete_requests')||'[]'); const r=reqs.find(x=>x.id===reqId); if(!r||r.status!=='Pending')return; r.status='Approved';r.decidedAt=new Date().toISOString();localStorage.setItem('edu_delete_requests',JSON.stringify(reqs)); await performApprovedDelete(r.studentId); renderDeleteApprovals(); }
 function rejectDeleteRequest(reqId){ let reqs=JSON.parse(localStorage.getItem('edu_delete_requests')||'[]'); const r=reqs.find(x=>x.id===reqId); if(r){r.status='Rejected';r.decidedAt=new Date().toISOString();localStorage.setItem('edu_delete_requests',JSON.stringify(reqs));renderDeleteApprovals();showToast('Delete request rejected','green');} }
 
-document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{renderDeleteApprovals();},300);});
+let _broadcastRecipients=[], _broadcastIndex=0, _broadcastText='';
+function getBroadcastRecipients(){
+  const target=document.getElementById('broadcast-target')?.value||'active'; const bookings=typeof bGetBookings==='function'?bGetBookings():[];
+  return students.filter(s=>{ if(!s.phone)return false; if(target==='active'&&getStatus(s)!=='Active')return false; if(target==='all')return true; if(target==='basement'||target==='floor2'){ const b=bookings.find(x=>x.studentId===s.id&&x.status==='active'); if(!b)return false; const floor=String(b.floor||b.library||'').toLowerCase(); return target==='basement'?floor.includes('base')||!floor:floor.includes('2')||floor.includes('floor2'); } return true; }).filter((s,i,a)=>a.findIndex(x=>String(x.phone).replace(/\D/g,'')===String(s.phone).replace(/\D/g,''))===i);
+}
+function previewBroadcastRecipients(){ const el=document.getElementById('broadcast-recipients'); if(!el)return; const list=getBroadcastRecipients(), bookings=typeof bGetBookings==='function'?bGetBookings():[]; document.getElementById('broadcast-count').textContent=list.length+' valid recipients'; el.innerHTML=list.length?list.map(s=>{const b=bookings.find(x=>x.studentId===s.id&&x.status==='active');return `<tr><td>${s.name}</td><td>${s.phone}</td><td>${getStatus(s)}</td><td>${b?'Seat '+b.seat:'—'}</td></tr>`}).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">No matching students with valid phone numbers.</td></tr>'; }
+function buildBroadcastText(){ const title=document.getElementById('broadcast-title').value.trim()||'Important Notice', body=document.getElementById('broadcast-message').value.trim(); if(!body)return null; return `*${title}*\n\n${body}\n\n– Swami Abhyasika`; }
+function startWhatsAppBroadcast(){ const text=buildBroadcastText(); if(!text)return showToast('Enter the emergency message','red'); _broadcastRecipients=getBroadcastRecipients(); if(!_broadcastRecipients.length)return showToast('No recipients found','red'); _broadcastText=text;_broadcastIndex=0; let hist=JSON.parse(localStorage.getItem('edu_broadcast_history')||'[]');hist.unshift({date:new Date().toISOString(),title:document.getElementById('broadcast-title').value.trim()||'Important Notice',target:document.getElementById('broadcast-target').selectedOptions[0].text,recipients:_broadcastRecipients.length});localStorage.setItem('edu_broadcast_history',JSON.stringify(hist));renderBroadcastHistory();openNextBroadcastRecipient(); }
+function openNextBroadcastRecipient(){ if(!_broadcastRecipients.length)return startWhatsAppBroadcast(); if(_broadcastIndex>=_broadcastRecipients.length)return showToast('All recipients opened','green'); const s=_broadcastRecipients[_broadcastIndex++], num=String(s.phone).replace(/\D/g,'').replace(/^0+/,''); window.open('https://wa.me/'+(num.length===10?'91'+num:num)+'?text='+encodeURIComponent(_broadcastText),'_blank'); document.getElementById('broadcast-count').textContent='Opened '+_broadcastIndex+' of '+_broadcastRecipients.length; }
+function copyBroadcastNumbers(){ const nums=getBroadcastRecipients().map(s=>s.phone).join(', '); if(!nums)return showToast('No phone numbers to copy','red'); navigator.clipboard.writeText(nums).then(()=>showToast('Phone numbers copied','green')); }
+function renderBroadcastHistory(){ const el=document.getElementById('broadcast-history');if(!el)return;const list=JSON.parse(localStorage.getItem('edu_broadcast_history')||'[]').slice(0,30);el.innerHTML=list.length?list.map(x=>`<tr><td>${new Date(x.date).toLocaleString()}</td><td>${x.title}</td><td>${x.target}</td><td>${x.recipients}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">No broadcasts prepared yet.</td></tr>'; }
+
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{renderDeleteApprovals();renderBroadcastHistory();previewBroadcastRecipients();},300);});
