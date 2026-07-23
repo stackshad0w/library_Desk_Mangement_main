@@ -2037,6 +2037,17 @@
       // Cloudinary URLs. Returns { value, changed } where value is the
       // (possibly) rewritten JSON string.
       function offloadImages(rawValue) {
+        // Some keys (e.g. 'edu_photo_<studentId>') store a bare
+        // data:image/... URI directly, not JSON containing one. Handle
+        // that case first — JSON.parse() on a bare data URI always
+        // throws, which used to make this function silently skip the
+        // Cloudinary upload for every student photo.
+        if (typeof rawValue === 'string' && rawValue.indexOf('data:image') === 0) {
+          return uploadImage(rawValue).then(function (url) {
+            return { value: url, changed: url !== rawValue };
+          });
+        }
+
         var parsed;
         try { parsed = JSON.parse(rawValue); } catch (e) { return Promise.resolve({ value: rawValue, changed: false }); }
 
@@ -2102,6 +2113,10 @@
         };
 
         Storage.prototype.removeItem = function (key) {
+          // Read the value before it's removed, so we know whether it was
+          // a Cloudinary-hosted photo that also needs deleting there.
+          var oldValue = (this === localStorage) ? localStorage.getItem(key) : null;
+
           origRemoveItem.call(this, key);
           if (this === localStorage) {
             fetch('/api/kv/' + encodeURIComponent(key), {
@@ -2110,6 +2125,16 @@
             }).catch(function (err) {
               console.error('Failed to delete synced data', err);
             });
+
+            if (typeof oldValue === 'string' && oldValue.indexOf('https://res.cloudinary.com/') === 0) {
+              fetch('/api/upload/image', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ url: oldValue })
+              }).catch(function (err) {
+                console.error('Failed to delete photo from Cloudinary', err);
+              });
+            }
           }
         };
       }

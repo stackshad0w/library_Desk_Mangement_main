@@ -5,8 +5,29 @@ const MAX_IMAGE_BYTES = 250 * 1024;
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 module.exports = async (req, res) => {
+  if (req.method === 'DELETE') {
+    if (!requireAuth(req, res)) return;
+
+    const { url, publicId } = req.body || {};
+    const pid = publicId || cloudinary.extractPublicId(url);
+    if (!pid) {
+      return res.status(400).json({ message: 'Missing publicId or a recognizable Cloudinary url.' });
+    }
+    if (!cloudinary.configured()) {
+      return res.status(503).json({ message: 'Image storage is temporarily unavailable.' });
+    }
+
+    try {
+      await cloudinary.destroy(pid);
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('Cloudinary image delete failed:', err);
+      return res.status(502).json({ message: 'Image delete failed. Please try again.' });
+    }
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
+    res.setHeader('Allow', 'POST, DELETE');
     return res.status(405).json({ message: 'Method not allowed' });
   }
 

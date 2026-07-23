@@ -1454,6 +1454,9 @@ ${avatarHtml}
       const result = await customConfirm('Delete this student? This action cannot be undone.', 'Delete Student', 'Delete', 'var(--red)');
       if (!result) return;
       students = students.filter(s => s.id !== id);
+      // Remove the student's stored photo too, so it doesn't linger in
+      // storage (or in the database/Cloudinary) after the student is gone.
+      try { localStorage.removeItem('edu_photo_' + id); } catch(e) {}
       // Release any seat booking tied to this student so the seat map shows
       // it as vacant instead of leaving a stale/ghost occupant behind.
       const bks = bGetBookings().map(b => (b.studentId === id && b.status === 'active') ? {...b, status: 'cancelled'} : b);
